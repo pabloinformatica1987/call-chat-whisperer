@@ -1,11 +1,16 @@
 
 import React, { createContext, useContext, useReducer } from 'react';
-import { AppState, AppAction, TrainingData, CallRecord } from '@/lib/types';
+import { AppState, AppAction, TrainingData, CallRecord, OpenAIRealtimeConfig } from '@/lib/types';
 import { useToast } from '@/components/ui/use-toast';
 
 const initialState: AppState = {
   isEnabled: false,
   apiKey: null,
+  realtimeConfig: {
+    apiKey: null,
+    model: "gpt-4o",
+    voice: "alloy"
+  },
   trainingData: [],
   callHistory: [],
   currentCall: null,
@@ -17,6 +22,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, isEnabled: action.payload };
     case 'SET_API_KEY':
       return { ...state, apiKey: action.payload };
+    case 'SET_REALTIME_CONFIG':
+      return { 
+        ...state, 
+        realtimeConfig: { 
+          ...state.realtimeConfig, 
+          ...action.payload,
+          apiKey: action.payload.apiKey || state.apiKey 
+        } 
+      };
     case 'ADD_TRAINING_DATA':
       return { ...state, trainingData: [...state.trainingData, action.payload] };
     case 'REMOVE_TRAINING_DATA':
@@ -70,6 +84,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         
         dispatch({ type: 'SET_API_KEY', payload: parsed.apiKey || null });
+        
+        if (parsed.realtimeConfig) {
+          dispatch({ type: 'SET_REALTIME_CONFIG', payload: parsed.realtimeConfig });
+        }
+        
         parsed.trainingData?.forEach((item: TrainingData) => {
           dispatch({ type: 'ADD_TRAINING_DATA', payload: item });
         });
@@ -92,13 +111,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem('callWhispererState', JSON.stringify({
         apiKey: state.apiKey,
+        realtimeConfig: state.realtimeConfig,
         trainingData: state.trainingData,
         callHistory: state.callHistory,
       }));
     } catch (error) {
       console.error('Error saving state:', error);
     }
-  }, [state.apiKey, state.trainingData, state.callHistory]);
+  }, [state.apiKey, state.realtimeConfig, state.trainingData, state.callHistory]);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>

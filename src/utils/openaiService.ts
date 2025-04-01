@@ -1,5 +1,6 @@
 
 import { toast } from "sonner";
+import { OpenAIRealtimeConfig } from "@/lib/types";
 
 // This would be replaced with actual permissions and call handling in a production app
 export const checkCallPermissions = async (): Promise<boolean> => {
@@ -8,6 +9,109 @@ export const checkCallPermissions = async (): Promise<boolean> => {
   return new Promise(resolve => {
     setTimeout(() => resolve(true), 1000);
   });
+};
+
+// Setup OpenAI Audio API for real-time transcription
+let audioContext: AudioContext | null = null;
+let mediaRecorder: MediaRecorder | null = null;
+let audioStream: MediaStream | null = null;
+let realtimeConnection: WebSocket | null = null;
+
+export const setupRealtimeConnection = async (config: OpenAIRealtimeConfig): Promise<boolean> => {
+  try {
+    if (!config.apiKey) {
+      toast.error('API key mancante. Aggiungi la tua chiave API OpenAI nelle impostazioni.');
+      return false;
+    }
+
+    // In una vera implementazione, qui si connetterebbe all'API Realtime di OpenAI
+    console.log('Configurando connessione Realtime con OpenAI...');
+    console.log('Usando modello:', config.model);
+    console.log('Usando voce:', config.voice);
+
+    // Simula una connessione WebSocket stabilita
+    return true;
+  } catch (error) {
+    console.error('Errore nella configurazione Realtime:', error);
+    toast.error('Impossibile configurare la connessione in tempo reale');
+    return false;
+  }
+};
+
+export const startRealtimeCall = async (
+  config: OpenAIRealtimeConfig,
+  trainingData: string,
+  callerInfo: string,
+  onTranscript: (text: string) => void,
+  onAiResponse: (text: string) => void
+): Promise<boolean> => {
+  try {
+    // In una vera implementazione, qui si avvierebbe la registrazione audio
+    // e si connetterebbe al WebSocket di OpenAI
+    console.log('Avvio chiamata in tempo reale...');
+    
+    // Simulazione della richiesta di autorizzazione microfono
+    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    // Simula l'inizializzazione di AudioContext e MediaRecorder
+    audioContext = new AudioContext();
+    mediaRecorder = new MediaRecorder(audioStream);
+    
+    // Simula la connessione WebSocket
+    console.log('Connessione WebSocket stabilita con OpenAI Realtime API');
+    console.log('Utilizzando dati di training:', trainingData);
+    console.log('Per il chiamante:', callerInfo);
+
+    // Simula l'avvio della registrazione
+    mediaRecorder.start();
+    
+    // Simula la ricezione di trascrizioni in tempo reale
+    setTimeout(() => {
+      onTranscript("Ciao, vorrei prendere un appuntamento per la prossima settimana.");
+    }, 2000);
+    
+    // Simula la risposta dell'AI
+    setTimeout(() => {
+      onAiResponse("Certamente! Posso aiutarti a programmare un appuntamento. Hai una preferenza di giorno o orario per la prossima settimana?");
+    }, 4000);
+    
+    return true;
+  } catch (error) {
+    console.error('Errore nell\'avvio della chiamata in tempo reale:', error);
+    toast.error('Impossibile avviare la chiamata in tempo reale');
+    return false;
+  }
+};
+
+export const stopRealtimeCall = async (): Promise<void> => {
+  try {
+    // In una vera implementazione, qui si interromperebbe la registrazione e la connessione
+    console.log('Terminazione chiamata in tempo reale...');
+    
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    
+    if (audioStream) {
+      audioStream.getTracks().forEach(track => track.stop());
+    }
+    
+    if (realtimeConnection) {
+      realtimeConnection.close();
+      realtimeConnection = null;
+    }
+    
+    mediaRecorder = null;
+    audioStream = null;
+    
+    if (audioContext) {
+      await audioContext.close();
+      audioContext = null;
+    }
+    
+  } catch (error) {
+    console.error('Errore nella terminazione della chiamata:', error);
+  }
 };
 
 export const generateResponse = async (

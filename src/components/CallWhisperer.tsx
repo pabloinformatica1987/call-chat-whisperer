@@ -1,13 +1,19 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from "sonner";
-import { CheckCircle2, PhoneCall, PhoneOff, AlertCircle } from 'lucide-react';
-import { checkCallPermissions, generateResponse, transcribeAudio } from '@/utils/openaiService';
+import { CheckCircle2, PhoneCall, PhoneOff, AlertCircle, Mic, MicOff, Info } from 'lucide-react';
+import { 
+  checkCallPermissions, 
+  generateResponse, 
+  transcribeAudio,
+  setupRealtimeConnection,
+  startRealtimeCall,
+  stopRealtimeCall
+} from '@/utils/openaiService';
 import { CallRecord } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -23,8 +29,9 @@ const CallWhisperer: React.FC = () => {
   const { state, dispatch } = useApp();
   const [permissionsGranted, setPermissionsGranted] = useState<boolean | null>(null);
   const [simulatedCall, setSimulatedCall] = useState(false);
+  const [isRealtimeActive, setIsRealtimeActive] = useState(false);
+  const currentCallRef = useRef<CallRecord | null>(null);
   
-  // Check permissions on component mount and when enabled state changes
   useEffect(() => {
     const checkPermissions = async () => {
       if (state.isEnabled) {
@@ -45,6 +52,33 @@ const CallWhisperer: React.FC = () => {
     
     checkPermissions();
   }, [state.isEnabled, dispatch]);
+
+  useEffect(() => {
+    const initializeRealtime = async () => {
+      if (state.apiKey && state.isEnabled) {
+        if (!state.realtimeConfig) {
+          dispatch({
+            type: 'SET_REALTIME_CONFIG',
+            payload: {
+              apiKey: state.apiKey,
+              model: "gpt-4o",
+              voice: "alloy"
+            }
+          });
+        }
+        
+        const config = {
+          apiKey: state.apiKey,
+          model: state.realtimeConfig?.model || "gpt-4o",
+          voice: state.realtimeConfig?.voice || "alloy"
+        };
+        
+        await setupRealtimeConnection(config);
+      }
+    };
+    
+    initializeRealtime();
+  }, [state.apiKey, state.isEnabled]);
   
   const handleToggleEnabled = (checked: boolean) => {
     dispatch({ type: 'SET_ENABLED', payload: checked });
@@ -56,6 +90,34 @@ const CallWhisperer: React.FC = () => {
       toast.info('Call Whisperer Deactivated', {
         description: 'You will need to answer calls manually.'
       });
+      
+      if (isRealtimeActive) {
+        stopRealtimeCall().then(() => {
+          setIsRealtimeActive(false);
+        });
+      }
+    }
+  };
+  
+  const handleTranscriptUpdate = (text: string) => {
+    if (currentCallRef.current) {
+      const updatedCall = {
+        ...currentCallRef.current,
+        transcript: text
+      };
+      currentCallRef.current = updatedCall;
+      dispatch({ type: 'SET_CURRENT_CALL', payload: updatedCall });
+    }
+  };
+  
+  const handleAiResponse = (text: string) => {
+    if (currentCallRef.current) {
+      const updatedCall = {
+        ...currentCallRef.current,
+        aiResponses: [...currentCallRef.current.aiResponses, text]
+      };
+      currentCallRef.current = updatedCall;
+      dispatch({ type: 'SET_CURRENT_CALL', payload: updatedCall });
     }
   };
   
@@ -75,7 +137,6 @@ const CallWhisperer: React.FC = () => {
     try {
       toast.info(`Incoming call from ${randomCaller.name || randomCaller.number}`);
       
-      // Create a call record
       const callId = uuidv4();
       const newCall: CallRecord = {
         id: callId,
@@ -87,56 +148,69 @@ const CallWhisperer: React.FC = () => {
         aiResponses: []
       };
       
+      currentCallRef.current = newCall;
       dispatch({ type: 'SET_CURRENT_CALL', payload: newCall });
       
-      // Simulate delay before answering
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       if (!state.isEnabled) {
         toast.info('Call not answered - Call Whisperer is disabled');
         dispatch({ type: 'SET_CURRENT_CALL', payload: null });
+        currentCallRef.current = null;
         setSimulatedCall(false);
         return;
       }
       
-      // Simulate answering
       toast.success('Call automatically answered');
-      
-      // Simulate transcription delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Get mock transcript
-      const mockTranscript = await transcribeAudio(new Blob());
-      
-      // Update call with transcript
-      newCall.transcript = mockTranscript;
-      dispatch({ type: 'SET_CURRENT_CALL', payload: { ...newCall } });
-      
-      // Generate AI response
+      setIsRealtimeActive(true);
+
       const trainingContent = state.trainingData.map(t => t.content).join('\n');
       const callerInfo = `${randomCaller.name ? randomCaller.name + ' (' + randomCaller.number + ')' : randomCaller.number}`;
-      const response = await generateResponse(
-        state.apiKey,
+      
+      const config = {
+        apiKey: state.apiKey,
+        model: state.realtimeConfig?.model || "gpt-4o",
+        voice: state.realtimeConfig?.voice || "alloy"
+      };
+      
+      const success = await startRealtimeCall(
+        config,
         trainingContent,
         callerInfo,
-        mockTranscript
+        handleTranscriptUpdate,
+        handleAiResponse
       );
       
-      // Update with response
-      newCall.aiResponses = [response];
-      newCall.duration = Math.floor(Math.random() * 60) + 20; // Random duration between 20-80s
+      if (!success) {
+        toast.error('Failed to establish realtime connection');
+        setIsRealtimeActive(false);
+        dispatch({ type: 'SET_CURRENT_CALL', payload: null });
+        currentCallRef.current = null;
+        setSimulatedCall(false);
+        return;
+      }
       
-      // Simulate call ending
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 10000));
       
-      // End call
-      toast.info('Call ended');
-      dispatch({ type: 'ADD_CALL_RECORD', payload: newCall });
-      dispatch({ type: 'SET_CURRENT_CALL', payload: null });
+      await stopRealtimeCall();
+      setIsRealtimeActive(false);
+      
+      if (currentCallRef.current) {
+        const finalCall = {
+          ...currentCallRef.current,
+          duration: Math.floor(Math.random() * 60) + 20
+        };
+        
+        toast.info('Call ended');
+        dispatch({ type: 'ADD_CALL_RECORD', payload: finalCall });
+        dispatch({ type: 'SET_CURRENT_CALL', payload: null });
+        currentCallRef.current = null;
+      }
       
     } catch (error) {
       console.error('Error in simulated call:', error);
       toast.error('Simulated call failed');
+      setIsRealtimeActive(false);
     } finally {
       setSimulatedCall(false);
     }
@@ -154,7 +228,7 @@ const CallWhisperer: React.FC = () => {
               <div className="space-y-0.5">
                 <Label htmlFor="auto-answer">Auto-Answer Calls</Label>
                 <p className="text-sm text-muted-foreground">
-                  When enabled, Call Whisperer will automatically answer incoming calls
+                  When enabled, Call Whisperer will automatically answer incoming calls using OpenAI Realtime API
                 </p>
               </div>
               <Switch
@@ -203,7 +277,11 @@ const CallWhisperer: React.FC = () => {
                 <div className="absolute -top-3 -right-3">
                   <div className="relative inline-flex">
                     <span className="flex h-8 w-8 bg-whisperer-primary rounded-full items-center justify-center">
-                      <PhoneCall className="h-4 w-4 text-white" />
+                      {isRealtimeActive ? (
+                        <Mic className="h-4 w-4 text-white animate-pulse" />
+                      ) : (
+                        <PhoneCall className="h-4 w-4 text-white" />
+                      )}
                     </span>
                     <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full border-2 border-whisperer-primary opacity-75"></span>
                   </div>
@@ -211,9 +289,28 @@ const CallWhisperer: React.FC = () => {
                 <p className="font-semibold text-whisperer-primary">
                   Active Call: {state.currentCall.callerName || state.currentCall.phoneNumber}
                 </p>
-                <p className="text-sm mt-1">
-                  {state.currentCall.transcript ? 'Processing response...' : 'Listening...'}
-                </p>
+                <div className="text-sm mt-2 space-y-2">
+                  {isRealtimeActive && (
+                    <div className="flex items-center space-x-2">
+                      <Mic className="h-3 w-3 text-whisperer-primary animate-pulse" />
+                      <span>Realtime processing active</span>
+                    </div>
+                  )}
+                  
+                  {state.currentCall.transcript && (
+                    <div className="p-2 bg-gray-50 rounded-md">
+                      <p className="text-xs text-gray-500">Caller said:</p>
+                      <p className="text-sm">{state.currentCall.transcript}</p>
+                    </div>
+                  )}
+                  
+                  {state.currentCall.aiResponses && state.currentCall.aiResponses.length > 0 && (
+                    <div className="p-2 bg-whisperer-primary/5 rounded-md">
+                      <p className="text-xs text-whisperer-primary">AI responded:</p>
+                      <p className="text-sm">{state.currentCall.aiResponses[state.currentCall.aiResponses.length - 1]}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <Button 
@@ -243,6 +340,17 @@ const CallWhisperer: React.FC = () => {
                 </p>
               </div>
             )}
+
+            <div className="flex items-center p-3 rounded-lg bg-blue-50 border border-blue-200">
+              <Info className="h-5 w-5 text-blue-600 mr-3" />
+              <div className="text-sm text-blue-800">
+                <p className="font-semibold">OpenAI Realtime API</p>
+                <p>
+                  This app è ora configurata per utilizzare OpenAI Realtime API per la trascrizione e la risposta
+                  alle chiamate in tempo reale.
+                </p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

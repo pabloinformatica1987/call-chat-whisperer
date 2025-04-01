@@ -1,20 +1,23 @@
 
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrainingData } from '@/lib/types';
 import { toast } from 'sonner';
-import { PlusCircle, Trash2 } from 'lucide-react';
+import { PlusCircle, Trash2, Settings } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const TrainingInput: React.FC = () => {
   const { state, dispatch } = useApp();
   const [apiKey, setApiKey] = useState(state.apiKey || '');
   const [newTraining, setNewTraining] = useState('');
+  const [model, setModel] = useState(state.realtimeConfig?.model || 'gpt-4o');
+  const [voice, setVoice] = useState(state.realtimeConfig?.voice || 'alloy');
 
   const handleAddTraining = () => {
     if (!newTraining.trim()) {
@@ -42,6 +45,17 @@ const TrainingInput: React.FC = () => {
     dispatch({ type: 'SET_API_KEY', payload: apiKey });
     toast.success('API key saved');
   };
+  
+  const handleSaveRealtimeConfig = () => {
+    dispatch({
+      type: 'SET_REALTIME_CONFIG',
+      payload: {
+        model,
+        voice
+      }
+    });
+    toast.success('Realtime configuration saved');
+  };
 
   return (
     <div className="space-y-6">
@@ -67,6 +81,59 @@ const TrainingInput: React.FC = () => {
                 Your API key is stored locally and used to access OpenAI services.
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>OpenAI Realtime Configuration</CardTitle>
+          <CardDescription>
+            Configure the models and voices used for realtime call processing
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="model">AI Model</Label>
+                <Select value={model} onValueChange={setModel}>
+                  <SelectTrigger id="model">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                    <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="voice">Voice</Label>
+                <Select value={voice} onValueChange={setVoice}>
+                  <SelectTrigger id="voice">
+                    <SelectValue placeholder="Select voice" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="alloy">Alloy</SelectItem>
+                    <SelectItem value="echo">Echo</SelectItem>
+                    <SelectItem value="fable">Fable</SelectItem>
+                    <SelectItem value="onyx">Onyx</SelectItem>
+                    <SelectItem value="nova">Nova</SelectItem>
+                    <SelectItem value="shimmer">Shimmer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <Button 
+              onClick={handleSaveRealtimeConfig} 
+              className="w-full"
+              variant="outline"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Save Realtime Configuration
+            </Button>
           </div>
         </CardContent>
       </Card>
