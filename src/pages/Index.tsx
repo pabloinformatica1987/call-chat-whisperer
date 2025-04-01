@@ -3,7 +3,7 @@ import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppProvider } from '@/context/AppContext';
 import Header from '@/components/Header';
-import CallWhisperer from '@/components/CallWhisperer';
+import CallWhisperer from '@/components/call-whisperer/CallWhisperer';
 import TrainingInput from '@/components/TrainingInput';
 import CallHistory from '@/components/CallHistory';
 import { PhoneCall, BookOpen, History, Info } from 'lucide-react';
