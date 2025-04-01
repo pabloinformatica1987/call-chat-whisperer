@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { toast } from "sonner";
 import { CheckCircle2, PhoneCall, PhoneOff, AlertCircle } from 'lucide-react';
 import { checkCallPermissions, generateResponse, transcribeAudio } from '@/utils/openaiService';
 import { CallRecord } from '@/lib/types';
@@ -48,12 +48,15 @@ const CallWhisperer: React.FC = () => {
   
   const handleToggleEnabled = (checked: boolean) => {
     dispatch({ type: 'SET_ENABLED', payload: checked });
-    toast({
-      title: checked ? 'Call Whisperer Activated' : 'Call Whisperer Deactivated',
-      description: checked
-        ? 'The app will now answer incoming calls automatically.'
-        : 'You will need to answer calls manually.'
-    });
+    if (checked) {
+      toast.success('Call Whisperer Activated', {
+        description: 'The app will now answer incoming calls automatically.'
+      });
+    } else {
+      toast.info('Call Whisperer Deactivated', {
+        description: 'You will need to answer calls manually.'
+      });
+    }
   };
   
   const simulateIncomingCall = async () => {
